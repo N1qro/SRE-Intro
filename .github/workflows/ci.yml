@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - feature/lab5
+
+jobs:
+  build:
+    if: "!startsWith(github.event.head_commit.message, 'ci:')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push QuickTicket images
+        env:
+          IMAGE_OWNER: n1qro
+          SHA: ${{ github.sha }}
+        run: |
+          docker build -t ghcr.io/${IMAGE_OWNER}/quickticket-gateway:${SHA} ./app/gateway
+          docker push ghcr.io/${IMAGE_OWNER}/quickticket-gateway:${SHA}
+
+          docker build -t ghcr.io/${IMAGE_OWNER}/quickticket-events:${SHA} ./app/events
+          docker push ghcr.io/${IMAGE_OWNER}/quickticket-events:${SHA}
+
+          docker build -t ghcr.io/${IMAGE_OWNER}/quickticket-payments:${SHA} ./app/payments
+          docker push ghcr.io/${IMAGE_OWNER}/quickticket-payments:${SHA}
+
+      - name: Update image tags in manifests
+        env:
+          IMAGE_OWNER: n1qro
+          SHA: ${{ github.sha }}
+        run: |
+          sed -i "s|image: ghcr.io/.*/quickticket-gateway:.*|image: ghcr.io/${IMAGE_OWNER}/quickticket-gateway:${SHA}|" k8s/gateway.yaml
+          sed -i "s|image: ghcr.io/.*/quickticket-events:.*|image: ghcr.io/${IMAGE_OWNER}/quickticket-events:${SHA}|" k8s/events.yaml
+          sed -i "s|image: ghcr.io/.*/quickticket-payments:.*|image: ghcr.io/${IMAGE_OWNER}/quickticket-payments:${SHA}|" k8s/payments.yaml
+
+      - name: Commit and push manifest update
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add k8s/gateway.yaml k8s/events.yaml k8s/payments.yaml
+          git diff --cached --quiet || git commit -m "ci: update image tags to ${{ github.sha }}"
+          git push origin HEAD:${{ github.ref_name }}
