@@ -5,9 +5,6 @@
 # These show what "correct" looks like; students don't see them.
 refs/
 
-# K8s manifests (students write them in lab 4 per-service)
-k8s/
-
 # Database migrations (students run `alembic init` in lab 9)
 migrations/
 alembic.ini
