@@ -6,6 +6,10 @@ on:
       - main
       - feature/lab5
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     if: "!startsWith(github.event.head_commit.message, 'ci:')"
@@ -56,4 +60,12 @@ jobs:
           git config user.email "github-actions@github.com"
           git add k8s/gateway.yaml k8s/events.yaml k8s/payments.yaml
           git diff --cached --quiet || git commit -m "ci: update image tags to ${{ github.sha }}"
+
+          git fetch origin "${{ github.ref_name }}"
+          remote_sha="$(git rev-parse "origin/${{ github.ref_name }}")"
+          if [ "$remote_sha" != "${{ github.sha }}" ]; then
+            echo "Remote branch moved from ${{ github.sha }} to $remote_sha; skipping stale manifest update."
+            exit 0
+          fi
+
           git push origin HEAD:${{ github.ref_name }}
